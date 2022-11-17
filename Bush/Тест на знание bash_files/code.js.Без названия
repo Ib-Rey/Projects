@@ -1,0 +1,195 @@
+function sendStat(from, current_page, vstr, ua) {
+    let http = new XMLHttpRequest();
+    let url = 'https://playground.learnqa.ru/api/stat';
+    let params_tpl = '?from_url={FROM}&current_page={CURRENT_PAGE}&vstr={VSTR}&ua={UA}';
+    let params = params_tpl
+        .replace("{FROM}", from)
+        .replace("{VSTR}", vstr)
+        .replace("{UA}", ua)
+        .replace("{CURRENT_PAGE}", current_page);
+
+    params = encodeURI(params);
+    url += params;
+
+    http.open('GET', url, true);
+    http.onreadystatechange = function() {
+        if (http.readyState === 4 && http.status === 200) {
+            console.log(http.responseText);
+        }
+    }
+    http.send(params);
+}
+
+function getUniqueValue(f) {
+    let http = new XMLHttpRequest();
+    let url = 'https://playground.learnqa.ru/api/get_unique_value';
+    http.open('POST', url, true);
+    http.onreadystatechange = function() {
+        if (http.readyState === 4 && http.status === 200) {
+            let v = JSON.parse(http.responseText)["value"];
+            createCookie("vstr", v, 750);
+            f();
+        }
+    }
+    http.send();
+}
+
+function getDates() {
+    let http = new XMLHttpRequest();
+    let url = 'https://playground.learnqa.ru/ajax/bot/get_dates';
+    http.open('GET', url, true);
+    http.onreadystatechange = function() {
+        if (http.readyState === 4 && http.status === 200) {
+            let v = JSON.parse(http.responseText);
+            v.dates.forEach((item) => {
+                let uri = item.uri;
+
+                let date_long = item.long;
+                let date_short = item.short;
+
+                let mask_long1 = '{{ date_long_' + uri + ' }}';
+                let mask_long2 = '{{ DATE_LONG_' + uri.toUpperCase() + ' }}';
+                let mask_shots1 = '{{ date_short_' + uri + ' }}';
+                let mask_shots2 = '{{ DATE_SHORT_' + uri.toUpperCase() + ' }}';
+
+                let data = [
+                    {"mask": mask_shots1, "date": date_short},
+                    {"mask": mask_long1, "date": date_long},
+                    {"mask": mask_shots2, "date": date_short},
+                    {"mask": mask_long2, "date": date_long},
+                ];
+
+                data.forEach((it) => {
+                    let mask = it.mask;
+                    let date = it.date;
+
+                    let xpath = "//*[contains(text(),'" + mask + "')]";
+                    let els_by_xpath = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
+
+                    let els = [];
+                    let this_node = els_by_xpath.iterateNext();
+
+                    while (this_node) {
+                        els.push(this_node);
+                        this_node = els_by_xpath.iterateNext();
+                    }
+
+                    els.forEach((el) => {
+                        el.innerText = el.innerText.replace(mask, date);
+                        if (el.value) {
+                            el.value = el.value.replace(mask, date);
+                        }
+                    });
+                });
+            });
+
+        }
+    }
+    http.send();
+}
+
+function createCookie(name, value, days) {
+    if (!name || !value) {
+        console.log("Bad cookie setting!");
+        return;
+    }
+
+    value = encodeURIComponent(value);
+
+    let expires;
+    if (days) {
+        let date = new Date();
+        date.setTime(date.getTime()+(days*24*60*60*1000));
+        expires = "; expires=" + date.toGMTString();
+    } else {
+        expires = "";
+    }
+    document.cookie = name+"="+value+expires+"; path=/";
+}
+
+function getCookie(name) {
+    let nameEQ = name + "=";
+    let ca = document.cookie.split(';');
+    for(let i=0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') {
+            c = c.substring(1,c.length);
+        }
+        if (c.indexOf(nameEQ) === 0) {
+            let value = c.substring(nameEQ.length,c.length);
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+function deleteCookie(name) {
+    createCookie(name,"",-1);
+}
+
+function showOrHidePromo() {
+    setTimeout(() => {
+        let total = $('.t706__cartwin-prodamount-price').html().replace(' ', '').split(" ")[0];
+        if (total % 500 !== 0) {
+            $('[data-input-lid="1551022890242"]').hide();
+            $('[data-input-lid="1551022890242"] input').val("");
+
+            $('[data-input-lid="1600078323558"]').hide();
+            $('[data-input-lid="1600078323558"] input').val("");
+
+            // explanation blocks
+            $('[data-input-lid="1596434003489"]').show();
+            $('[data-input-lid="1596434104948"]').show();
+            $('[data-input-lid="1596434142592"]').show();
+            $('[data-input-lid="1600078423354"]').show();
+        } else {
+            $('[data-input-lid="1551022890242"]').show();
+            $('[data-input-lid="1600078323558"]').show();
+
+            // explanation blocks
+            $('[data-input-lid="1596434003489"]').hide();
+            $('[data-input-lid="1596434104948"]').hide();
+            $('[data-input-lid="1596434142592"]').hide();
+            $('[data-input-lid="1600078423354"]').hide();
+        }
+    }, 111);
+}
+
+function setVstrCookieToInput() {
+    setTimeout(() => {
+        if (document.querySelectorAll('input[name="vstr"]').length > 0) {
+            let name = getCookie("vstr");
+            if (name === null) {
+                name = "none";
+            }
+            document.querySelector('input[name="vstr"]').value = name;
+        }
+    }, 2000);
+}
+
+$(document).ready(() => {
+    let ua = window.navigator.userAgent;
+    let current_page = window.location.href;
+    let from_url = document.referrer;
+
+    if (from_url.length === 0) {
+        from_url = "direct_entry";
+    }
+
+    if (getCookie("vstr") === null) {
+        getUniqueValue(() => {
+            let vstr = getCookie("vstr");
+            sendStat(from_url, current_page, vstr, ua);
+        });
+    } else {
+        let vstr = getCookie("vstr");
+        sendStat(from_url, current_page, vstr, ua);
+    }
+
+    $(document).on('click', 'a[href*="#order:"]', showOrHidePromo);
+    $(document).on('click', 'div.t706__product-del', showOrHidePromo);
+    $(document).on('click', 'div.t706__carticon-imgwrap', showOrHidePromo);
+    $(document).on('click', 'div.t706__product-deleted__timer__return', showOrHidePromo);
+    setVstrCookieToInput();
+    getDates();
+});
